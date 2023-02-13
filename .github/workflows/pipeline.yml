@@ -1,0 +1,36 @@
+name: Pipeline
+on: [push]
+
+jobs:
+  Build_Docker_Image:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+        with:
+          fetch-depth: 1
+
+      - name: Extract branch name
+        shell: bash
+        run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+        id: extract_branch
+
+      - name: Docker build
+        run: |
+          cd src/FinanceAPI
+          docker login -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_PASSWORD"
+          docker build -t $DOCKERHUB_USERNAME/finance-api:latest .
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+        
+      - name: Dotnet Test
+        run: docker run -v $(pwd):/app --rm mcr.microsoft.com/dotnet/core/sdk:3.1 /bin/sh -c "cd /app/src/FinanceAPI && dotnet test"
+
+      - name: Docker Publish
+        if: github.ref == 'refs/heads/master'
+        run: |
+          docker push $DOCKERHUB_USERNAME/finance-api
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
